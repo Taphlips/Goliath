@@ -9,10 +9,11 @@ class Goliath():
         self.vk_session = vk_api.VkApi(token=token)
         self.longpoll = VkBotLongPoll(self.vk_session, group_id)
         self.msg = 'Привет,{} вот список команд: /time, /wiki...'
-        self.commands = ['/time', '/wiki']
+        self.commands = ['/time', '/wiki', '/weat']
         self.tz = pytz.timezone('Europe/Moscow')
         self.days_of_week = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница',
                         'суббота', 'воскресенье']
+        self.app_id = "26fb73e2e5bbaf9382094cfdba8dee70"
         self.chatting()
 
     def current_time(self):
@@ -27,7 +28,8 @@ class Goliath():
         print(name, surname + ':', msg)
 
     def greeting(self, name):
-        self.msg = 'Здравствуйте, {}! Вот список доступных команд: /time, /wiki...'.format(name)
+        self.msg = 'Здравствуйте, {}! Вот список доступных команд: /time, /wiki, /weat. ' \
+                   'Примеры использования: /time, /wiki слон, /weat Тула.'.format(name)
 
     def wiki_search(self, request):
         try:
@@ -43,8 +45,33 @@ class Goliath():
             else:
                 return 'К сожалению, что-то пошло не так, и Википедия не дала ответа на Ваш запрос.'
 
-    def current_weather(self):
-        pass
+    def get_city_id(self, city):
+        s_city = "Москва, US"
+        try:
+            res = requests.get("http://api.openweathermap.org/data/2.5/find",
+                               params={'q': city, 'type': 'like', 'units': 'metric', 'APPID': self.app_id})
+            data = res.json()
+            cities = ["{} ({})".format(d['name'], d['sys']['country'])
+                      for d in data['list']]
+            print("city:", cities)
+            city_id = data['list'][0]['id']
+            print(city_id)
+            return city_id
+        except Exception as e:
+            print("Exception (find):", e)
+            pass
+
+    def current_weather(self, city_id):
+        try:
+            res = requests.get("http://api.openweathermap.org/data/2.5/weather",
+                               params={'id': city_id, 'units': 'metric', 'lang': 'ru', 'APPID': self.app_id})
+            data = res.json()
+            weather = 'Температура составляет {}°C, {}.'.format(data['main']['temp'],
+                                                                data['weather'][0]['description'])
+            return weather
+        except Exception as e:
+            print("Exception (weather):", e)
+            pass
 
     def chatting(self):
         for event in self.longpoll.listen():
@@ -65,10 +92,21 @@ class Goliath():
                                          random_id=random.randint(0, 2 ** 64))
                         print('Я: {}\n'.format('Выполняется поиск...'))
                         answer = self.wiki_search(msg.lstrip('/wiki '))
-                    vk.messages.send(user_id=user_id,
-                                     message=answer,
-                                     random_id=random.randint(0, 2 ** 64))
-                    print('Я: {}\n'.format(answer))
+                    elif msg[0:5] == '/weat':
+                        msg = msg.lstrip('/weat ')
+                        city_id = self.get_city_id(msg)
+                        answer = self.current_weather(city_id)
+
+                    try:
+                        vk.messages.send(user_id=user_id,
+                                         message=answer,
+                                         random_id=random.randint(0, 2 ** 64))
+                        print('Я: {}\n'.format(answer))
+                    except Exception:
+                        e = 'Произошла ошибка. Попробуйте снова.'
+                        vk.messages.send(user_id=user_id,
+                                         message=e,
+                                         random_id=random.randint(0, 2 ** 64))
                 else:
                     self.greeting(name)
                     vk.messages.send(user_id=user_id,
