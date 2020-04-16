@@ -9,7 +9,7 @@ class Goliath():
         self.vk_session = vk_api.VkApi(token=token)
         self.longpoll = VkBotLongPoll(self.vk_session, group_id)
         self.msg = 'Привет,{} вот список команд: /time, /wiki...'
-        self.commands = ['/time', '/wiki', '/weat']
+        self.commands = ['/time', '/wiki', '/weat', '/regi']
         self.tz = pytz.timezone('Europe/Moscow')
         self.days_of_week = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница',
                         'суббота', 'воскресенье']
@@ -28,8 +28,8 @@ class Goliath():
         print(name, surname + ':', msg)
 
     def greeting(self, name):
-        self.msg = 'Здравствуйте, {}! Вот список доступных команд: /time, /wiki, /weat. ' \
-                   'Примеры использования: /time, /wiki слон, /weat Тула.'.format(name)
+        self.msg = 'Здравствуйте, {}! Вот список доступных команд: /time, /wiki, /weat, /regi. ' \
+                   'Примеры использования: /time, /wiki слон, /weat Тула, /regi.'.format(name)
 
     def wiki_search(self, request):
         try:
@@ -96,6 +96,8 @@ class Goliath():
                         msg = msg.lstrip('/weat ')
                         city_id = self.get_city_id(msg)
                         answer = self.current_weather(city_id)
+                    elif msg[0:5] == '/regi':
+                        registration = Registration(vk, user_id)
 
                     try:
                         vk.messages.send(user_id=user_id,
@@ -113,6 +115,29 @@ class Goliath():
                                      message=self.msg,
                                      random_id=random.randint(0, 2 ** 64))
                     print('Я: {}\n'.format(self.msg))
+
+
+class Registration():
+    def __init__(self, vk, user_id):
+        self.user_id = user_id
+        self.vk = vk
+        msg = 'Регистрация начнётся через пару секунд...'
+        self.vk.messages.send(user_id=self.user_id,
+                              message=msg,
+                              random_id=random.randint(0, 2 ** 64))
+        self.log_in()
+
+    def log_in(self):
+
+
+    def password(self):
+        pass
+
+    def age(self):
+        pass
+
+    def avatar(self):
+        pass
 
 
 if __name__ == '__main__':
