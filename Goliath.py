@@ -1,19 +1,31 @@
-import vk_api, random, pytz, wikipedia, sqlite3, requests
+import vk_api, random, pytz, wikipedia, sqlite3, requests, json
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from datetime import datetime
 
 
 class Goliath():
-    def __init__(self, token='4780dffe7455f6914472013e2b31e5659c57325d768e6548f5e9f55986eeb9d371a3d34b8bc4d24b11a9b',
+    def __init__(self, token='token',
                  group_id='193261610'):
         self.vk_session = vk_api.VkApi(token=token)
         self.longpoll = VkBotLongPoll(self.vk_session, group_id)
-        self.msg = 'Привет,{} вот список команд: /time, /wiki...'
-        self.commands = ['/time', '/wiki', '/weat', '/regi', '/tran']
+        self.msg = ''
+        self.commands = ['/time', '/wiki', '/weat', '/regi', '/tran', '/help', '/news']
         self.tz = pytz.timezone('Europe/Moscow')
         self.days_of_week = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница',
                         'суббота', 'воскресенье']
         self.app_id = "26fb73e2e5bbaf9382094cfdba8dee70"
+        self.langs = {'ру': 'ru',
+                      'ан': 'en',
+                      'ла': 'la',
+                      'фр': 'fr',
+                      'ис': 'es',
+                      'ит': 'it',
+                      'ки': 'zh',
+                      'по': 'pl',
+                      'ук': 'uk',
+                      'не': 'de'}
+        self.greetings = ['Приветствую', 'Здравствуйте']
+        self.news_url = 'https://newsapi.org/v2/top-headlines?country=ru&apiKey=api'
         self.chatting()
 
     def current_time(self):
@@ -28,8 +40,8 @@ class Goliath():
         print(name, surname + ':', msg)
 
     def greeting(self, name):
-        self.msg = 'Здравствуйте, {}! Вот список доступных команд: /time, /wiki, /weat, /regi, /tran. ' \
-                   'Примеры использования: /time, /wiki слон, /weat Тула, /regi, /tran hello.'.format(name)
+        self.msg = '{}, {}! Вот список доступных команд: /time, /wiki, /weat, /regi,' \
+                   ' /tran, /help, /news.'.format(random.choice(self.greetings), name)
 
     def wiki_search(self, request):
         try:
@@ -46,7 +58,6 @@ class Goliath():
                 return 'К сожалению, что-то пошло не так, и Википедия не дала ответа на Ваш запрос.'
 
     def get_city_id(self, city):
-        s_city = "Москва, US"
         try:
             res = requests.get("http://api.openweathermap.org/data/2.5/find",
                                params={'q': city, 'type': 'like', 'units': 'metric', 'APPID': self.app_id})
@@ -73,16 +84,45 @@ class Goliath():
             print("Exception (weather):", e)
             pass
 
-    def translation(self, word):
+    def translation(self, word, lang='ру-ан'):
         url = 'https://translate.yandex.net/api/v1.5/tr.json/translate?'
         key = 'trnsl.1.1.20190227T075339Z.1b02a9ab6d4a47cc.f37d50831b51374ee600fd6aa0259419fd7ecd97'
-        lang = 'en-ru'
-        r = requests.post(url, data={'key': key, 'text': word, 'lang': lang}).json()
+        lang = lang.split('-')
+        primary = self.langs[lang[0]]
+        secondary = self.langs[lang[1]]
+        trans = f'{primary}-{secondary}'
+        r = requests.post(url, data={'key': key, 'text': word, 'lang': trans}).json()
         return r['text']
+
+    def picture(self):
+        return User.picture(user)
+
+    def help(self):
+        return 'https://vk.com/topic-193261610_41497800'
+
+    def new_keyboard(self):
+        keyboard = {
+            'one_time': True,
+            'buttons': [[{'action': {'type': 'text', 'label': '/help', 'payload': {'button': 0}}, 'color': 'primary'}],
+                        [{'action': {'type': 'text', 'label': '/news', 'payload': {'button': 1}}, 'color': 'primary'}]],
+                        'inline': False}
+
+        return keyboard
+
+    def news(self):
+        try:
+            response = requests.get(self.news_url)
+            news = json.loads(response.text)
+            new = random.choice(news['articles'])
+            return new['title']
+        except:
+            return 'Произошла ошибка'
 
     def chatting(self):
         for event in self.longpoll.listen():
             if event.type == VkBotEventType.MESSAGE_NEW:
+                keyboard = self.new_keyboard()
+
                 user_id = event.obj.message['from_id']
                 vk = self.vk_session.get_api()
                 user = vk.users.get(user_ids=user_id)[0]
@@ -112,20 +152,34 @@ class Goliath():
                     elif msg[0:5] == '/regi':
                         answer = Registration(vk, user_id, msg).form()
 
+                    elif msg[0:5] == '/help':
+                        answer = self.help()
+
+                    elif msg[0:5] == '/news':
+                        answer = self.news()
+
                     elif msg[0:5] == '/tran':
-                        msg = msg.lstrip('/tran ')
-                        answer = self.translation(msg)
+                        msg = msg.lstrip('/tran ').split(', ')
+                        if len(msg) == 1:
+                            if msg[0] != '':
+                                answer = self.translation(msg[0])
+                            else:
+                                answer = 'Вы не ввели слово для перевода'
+                        elif len(msg) == 2:
+                            answer = self.translation(msg[0], msg[1])
 
                     if msg[0:5] == '/regi' and answer[0] is True:
+                        image = self.picture()
                         vk.messages.send(user_id=user_id,
                                          message=answer[1],
-                                         attachment='foreign_files/ordinary.jpg',
+                                         attachment=image,
                                          random_id=random.randint(0, 2 ** 64))
-                        print('Я: {}\n'.format(answer))
+                        print('Я: {}\n'.format(answer[1]))
                     else:
                         try:
                             vk.messages.send(user_id=user_id,
                                              message=answer,
+                                             keyboard=json.dumps(keyboard),
                                              random_id=random.randint(0, 2 ** 64))
                             print('Я: {}\n'.format(answer))
                         except Exception:
@@ -137,6 +191,7 @@ class Goliath():
                     self.greeting(name)
                     vk.messages.send(user_id=user_id,
                                      message=self.msg,
+                                     keyboard=json.dumps(keyboard),
                                      random_id=random.randint(0, 2 ** 64))
                     print('Я: {}\n'.format(self.msg))
 
@@ -187,9 +242,8 @@ class Registration():
                     con.close()
                     return password
         else:
+            con.close()
             return 'Ваш аккаунт уже зарегистрирован в системе'
-
-        con.close()
 
     def check_password(self, password):
         up = 0
@@ -225,11 +279,35 @@ class Registration():
                 return 'К сожалению, Вы ещё не родились'
             if age > 150:
                 return 'К сожалению, данный возраст ещё не был зафиксирован. Сообщите нам, если Вы попали в ' \
-                       'Кингу Рекородов Гиннесса'
+                       'Книгу Рекородов Гиннесса'
             return (True, age)
         except Exception:
             return 'Указан некорректный возраст'
 
 
+class User():
+    def __init__(self, login, password):
+        vk_session = vk_api.VkApi(login, password, auth_handler=self.auth_handler)
+        self.vk = vk_session.get_api()
+        try:
+            vk_session.auth()
+        except vk_api.AuthError as error_msg:
+            print(error_msg)
+
+    def auth_handler(self):
+        key = input("Enter authentication code: ")
+        remember_device = True
+        return key, remember_device
+
+    def picture(self):
+        picture = self.vk.photos.get(group_id='193261610', album_id='271816083')['items']
+        number = random.randint(0, len(picture) - 1)
+        owner_id = picture[number]['owner_id']
+        photo_id = picture[number]['id']
+        group_attachment = 'photo{}_{}'.format(owner_id, photo_id)
+        return group_attachment
+
+
 if __name__ == '__main__':
+    user = User('login', 'password')
     goliath = Goliath()
